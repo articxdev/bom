@@ -1543,6 +1543,10 @@ async function renderSettings() {
       <div class="form-group"><label>New Admin PIN</label><input type="password" id="set-admin-pin" maxlength="10" inputmode="numeric"></div>
       <div class="form-group"><label>New Operator PIN</label><input type="password" id="set-operator-pin" maxlength="10" inputmode="numeric"></div>
       <button class="btn btn-warning" onclick="savePins()">Update PINs</button>
+      <hr style="border:none;border-top:1px solid var(--border);margin:24px 0">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:12px">Data</h4>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Seed default components and products for initial setup.</p>
+      <button class="btn btn-success" onclick="seedData()">Seed Sample Data</button>
     </div>\`;
   try {
     const s = await api('GET','/api/settings');
@@ -1575,6 +1579,17 @@ async function savePins() {
     showToast('PINs updated','success');
     document.getElementById('set-admin-pin').value='';
     document.getElementById('set-operator-pin').value='';
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function seedData() {
+  if (!confirm('This will initialize sample components and products. Continue?')) return;
+  try {
+    const res = await api('GET','/api/seed');
+    showToast('Sample data seeded! '+res.components?.length+' components, '+res.products?.length+' products','success');
+    state.products = [];
+    state.components = [];
+    navigate('dashboard');
   } catch(e) { showToast(e.message,'error'); }
 }
 

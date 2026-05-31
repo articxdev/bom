@@ -45,6 +45,8 @@ export default {
 
     // Seed route
     if (path === '/api/seed' && request.method === 'GET') {
+      const session = await requireAuth(env.KV, request);
+      if (!session) return unauthorizedResponse();
       const res = await handleSeed(env.KV);
       return addCors(res);
     }
