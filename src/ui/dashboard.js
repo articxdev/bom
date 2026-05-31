@@ -40,40 +40,11 @@ body {
 ::-webkit-scrollbar-track { background:var(--surface); }
 ::-webkit-scrollbar-thumb { background:var(--muted); border-radius:3px; }
 
-/* Login */
-#login-screen {
-  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  background:var(--bg); z-index:9999;
-}
-#login-screen.hidden { display:none; }
-.login-card {
-  background:var(--card); border-radius:var(--radius); padding:40px;
-  width:360px; max-width:90vw; box-shadow:var(--shadow);
-  border:1px solid var(--border);
-}
-.login-card h1 {
-  font-size:24px; font-weight:700; text-align:center; margin-bottom:4px;
-}
-.login-card .sub { color:var(--muted); text-align:center; margin-bottom:24px; font-size:14px; }
-.login-card label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; margin-top:16px; }
-.login-card input,.login-card select {
-  width:100%; padding:10px 12px; border-radius:var(--radius-sm);
-  background:var(--surface); border:1px solid var(--border); color:var(--text);
-  font-size:14px; outline:none; transition:border-color .2s;
-}
-.login-card input:focus,.login-card select:focus { border-color:var(--accent); }
-.login-card button {
-  width:100%; margin-top:24px; padding:12px; border-radius:var(--radius-sm);
-  border:none; background:var(--accent); color:#fff; font-size:15px; font-weight:600;
-  cursor:pointer; transition:opacity .2s;
-}
-.login-card button:hover { opacity:.85; }
-.login-card button:disabled { opacity:.5; cursor:not-allowed; }
-.login-error { color:var(--danger); font-size:13px; text-align:center; margin-top:8px; display:none; }
+
 
 /* App layout */
 #app { display:flex; min-height:100vh; }
-#app.hidden { display:none; }
+#app { display:flex; }
 
 /* Sidebar */
 #sidebar {
@@ -360,29 +331,13 @@ label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; fo
 </head>
 <body>
 
-<div id="login-screen">
-  <div class="login-card">
-    <h1>🏭 Production</h1>
-    <p class="sub">Management System</p>
-    <label>PIN</label>
-    <input type="password" id="login-pin" placeholder="Enter PIN" maxlength="10" inputmode="numeric" autocomplete="off">
-    <label>Role</label>
-    <select id="login-role">
-      <option value="admin">Admin</option>
-      <option value="operator">Operator</option>
-    </select>
-    <button id="login-btn" onclick="handleLogin()">Sign In</button>
-    <div class="login-error" id="login-error"></div>
-  </div>
-</div>
-
-<div id="app" class="hidden">
+<div id="app">
 
 <nav id="sidebar">
   <div class="sidebar-header"><span class="logo">🏭</span> ProdManager</div>
   <div class="sidebar-nav" id="sidebar-nav"></div>
   <div class="sidebar-footer">
-    <div class="nav-item logout" onclick="handleLogout()">🚪 Sign Out</div>
+    <div class="nav-item logout" onclick="handleLogout()">Sign Out</div>
   </div>
 </nav>
 
@@ -450,45 +405,19 @@ async function api(method, path, body) {
 }
 
 // ============== AUTH ==============
-async function handleLogin() {
-  const pin = document.getElementById('login-pin').value;
-  const role = document.getElementById('login-role').value;
-  const btn = document.getElementById('login-btn');
-  const errEl = document.getElementById('login-error');
-  errEl.style.display = 'none';
-  if (!pin) { errEl.textContent='Enter PIN'; errEl.style.display='block'; return; }
-  btn.disabled = true;
-  btn.textContent = 'Signing in...';
-  try {
-    const res = await api('POST','/api/auth/login',{pin,role});
-    state.token = res.token;
-    state.role = res.role;
-    localStorage.setItem('pm_token', res.token);
-    localStorage.setItem('pm_role', res.role);
-    showApp();
-  } catch(e) {
-    errEl.textContent = e.message;
-    errEl.style.display = 'block';
-  }
-  btn.disabled = false;
-  btn.textContent = 'Sign In';
-}
-
-async function handleLogout() {
-  try { await api('POST','/api/auth/logout'); } catch(e) {}
+function handleLogout() {
+  api('POST','/api/auth/logout').catch(()=>{});
   state.token = null;
   state.role = null;
   localStorage.removeItem('pm_token');
   localStorage.removeItem('pm_role');
   destroyCharts();
-  document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('app').classList.add('hidden');
+  document.getElementById('app').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--muted)">Logged out. Refresh to sign in again.</div>';
 }
 
 // ============== UI HELPERS ==============
 async function showApp() {
-  document.getElementById('login-screen').classList.add('hidden');
-  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('app').style.display = 'flex';
   document.getElementById('role-badge').textContent = state.role;
   document.getElementById('role-badge').className = 'role-badge '+state.role;
   renderSidebar();
@@ -1656,6 +1585,15 @@ function dateStr(d) {
 
 // ============== INIT ==============
 async function init() {
+  // Auto-login as admin
+  try {
+    const res = await api('POST','/api/auth/auto');
+    state.token = res.token;
+    state.role = res.role;
+    localStorage.setItem('pm_token', res.token);
+    localStorage.setItem('pm_role', res.role);
+  } catch(e) { console.error('Auto-login failed:', e); }
+
   // Auto-seed if no components exist
   try {
     const comps = await fetch('/api/components', {
@@ -1668,9 +1606,7 @@ async function init() {
       }
     }
   } catch(e) {}
-  if (state.token) {
-    showApp();
-  }
+  showApp();
 }
 init();
 </script>

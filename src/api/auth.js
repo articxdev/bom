@@ -7,6 +7,9 @@ export async function handleAuth(request, kv, env) {
   const url = new URL(request.url);
   const path = url.pathname;
 
+  if (path === '/api/auth/auto' && request.method === 'POST') {
+    return handleAutoLogin(kv);
+  }
   if (path === '/api/auth/login' && request.method === 'POST') {
     return handleLogin(request, kv, env);
   }
@@ -17,6 +20,11 @@ export async function handleAuth(request, kv, env) {
   return new Response(JSON.stringify({ error: 'Not found', code: 404 }), {
     status: 404, headers: { 'Content-Type': 'application/json' }
   });
+}
+
+async function handleAutoLogin(kv) {
+  const token = await createSession(kv, 'admin');
+  return jsonResponse({ token, role: 'admin', message: 'Auto-login' });
 }
 
 async function handleLogin(request, kv, env) {
