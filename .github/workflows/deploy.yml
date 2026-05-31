@@ -13,7 +13,30 @@ jobs:
         with:
           node-version: '20'
       - run: npm install
+      - name: Inject KV namespace IDs
+        run: |
+          sed -i "s/YOUR_KV_ID_HERE/${{ secrets.KV_ID }}/" wrangler.toml
+          sed -i "s/YOUR_KV_PREVIEW_ID_HERE/${{ secrets.KV_PREVIEW_ID }}/" wrangler.toml
       - run: npx wrangler deploy
+        id: deploy
+        continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Telegram notification
+        if: always()
+        run: |
+          STATUS="${{ steps.deploy.outcome }}"
+          MSG="🏭 *Production App Deploy*"
+          MSG="$MSG%0A%0AStatus: $STATUS"
+          MSG="$MSG%0ARepo: ${{ github.repository }}"
+          MSG="$MSG%0ABranch: ${{ github.ref_name }}"
+          MSG="$MSG%0ACommit: ${{ github.sha }}"
+          MSG="$MSG%0AActor: ${{ github.actor }}"
+          if [ "$STATUS" = "success" ]; then
+            MSG="$MSG%0A%0A✅ Deployed successfully!"
+          else
+            MSG="$MSG%0A%0A❌ Deployment failed!"
+          fi
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}&text=$MSG&parse_mode=Markdown"
