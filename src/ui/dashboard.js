@@ -532,15 +532,25 @@ async function renderDashboard() {
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="grid-4" id="dash-stats"></div><div class="grid-2" style="margin-top:16px"><div class="chart-wrap" id="dash-line-wrap"><canvas id="dash-line-chart"></canvas></div><div class="chart-wrap" id="dash-doughnut-wrap"><canvas id="dash-doughnut-chart"></canvas></div></div><div class="grid-2" style="margin-top:16px"><div class="card" id="dash-table-wrap"><h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Today\'s Production</h3><div class="table-wrap"><table><thead><tr><th>Time</th><th>Product</th><th>Qty</th><th>Shift</th></tr></thead><tbody id="dash-table-body"></tbody></table></div></div><div class="card" id="dash-alerts-wrap"><h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Stock Alerts</h3><div id="dash-alerts-list"></div></div></div>';
 
+  // Show loading state
+  document.getElementById('dash-stats').innerHTML = '<div class="skeleton" style="height:80px"></div>'.repeat(4);
+  
   let data;
-  try { data = await api('GET','/api/dashboard'); } catch(e) { showToast(e.message,'error'); return; }
+  try { 
+    data = await api('GET','/api/dashboard'); 
+  } catch(e) { 
+    console.error('Dashboard API error:', e);
+    el.innerHTML = '<div style="text-align:center;padding:60px;color:var(--muted)"><div style="font-size:16px;margin-bottom:12px">⚠️ Failed to load dashboard</div><div style="font-size:13px">'+e.message+'</div><div style="font-size:12px;margin-top:20px;color:var(--border)">Try going to Settings and clicking "Seed Sample Data"</div></div>';
+    showToast(e.message,'error'); 
+    return; 
+  }
 
   // Stat cards
   const statCards = [
-    { label:'Today', value:data.today.total, change: data.today.change !== null ? {val:data.today.change, dir: data.today.change>=0?'up':'down'} : null },
-    { label:'This Week', value:data.week.total, change: null },
-    { label:'This Month', value:data.month.total, change: null },
-    { label:'Lifetime', value:data.totalLifetime, change: null }
+    { label:'Today', value:data?.today?.total || 0, change: data?.today?.change !== null ? {val:data?.today?.change || 0, dir: (data?.today?.change || 0)>=0?'up':'down'} : null },
+    { label:'This Week', value:data?.week?.total || 0, change: null },
+    { label:'This Month', value:data?.month?.total || 0, change: null },
+    { label:'Lifetime', value:data?.totalLifetime || 0, change: null }
   ];
   document.getElementById('dash-stats').innerHTML = statCards.map(s=>\`
     <div class="card card-stat">
@@ -551,7 +561,7 @@ async function renderDashboard() {
   animateCounters();
 
   // Today's production table
-  const todayData = data.today;
+  const todayData = data?.today || {};
   if (todayData.byProduct && todayData.byProduct.length) {
     const tbody = document.getElementById('dash-table-body');
     const prodList = todayData.byProduct;
@@ -562,7 +572,7 @@ async function renderDashboard() {
   }
 
   // Stock alerts
-  document.getElementById('dash-alerts-list').innerHTML = data.stockAlerts.length
+  document.getElementById('dash-alerts-list').innerHTML = (data?.stockAlerts || []).length
     ? data.stockAlerts.map(a=>\`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
       <span>\${a.component}</span>
       <span><span class="mono">\${a.stock}</span> / \${a.min} <span class="badge \${a.status.toLowerCase()}">\${a.status}</span></span>
@@ -572,7 +582,7 @@ async function renderDashboard() {
   // Charts
   setTimeout(()=>{
     const lineCtx = document.getElementById('dash-line-chart');
-    if (lineCtx && data.week.daily) {
+    if (lineCtx && data?.week?.daily) {
       state.charts.line = new Chart(lineCtx, {
         type:'line',
         data:{
@@ -623,6 +633,14 @@ async function renderDashboard() {
       });
     }
   }, 100);
+  
+  // Show empty state if no data
+  if (!data || (data.today.total === 0 && data.week.total === 0)) {
+    const note = document.getElementById('dash-table-wrap');
+    if (note) {
+      note.innerHTML += '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">💡 No production data yet. Use <strong>Daily Production</strong> tab to log entries, or check <strong>Settings</strong> to seed sample data.</div>';
+    }
+  }
 }
 
 function animateCounters() {
@@ -1607,7 +1625,11 @@ async function init() {
     state.role = res.role;
     localStorage.setItem('pm_token', res.token);
     localStorage.setItem('pm_role', res.role);
-  } catch(e) { console.error('Auto-login failed:', e); }
+  } catch(e) { 
+    console.error('Auto-login failed:', e); 
+    showApp();
+    return;
+  }
 
   // Auto-seed if no components exist
   try {
@@ -1617,10 +1639,18 @@ async function init() {
     if (comps.ok) {
       const list = await comps.json();
       if (!Array.isArray(list) || list.length === 0) {
-        await fetch('/api/seed');
+        console.log('No components found, auto-seeding...');
+        const seedRes = await fetch('/api/seed', {
+          headers: state.token ? {'Authorization':'Bearer '+state.token} : {}
+        });
+        if (seedRes.ok) {
+          console.log('Auto-seed successful');
+        }
       }
     }
-  } catch(e) {}
+  } catch(e) {
+    console.error('Auto-seed error:', e);
+  }
   showApp();
 }
 init();
